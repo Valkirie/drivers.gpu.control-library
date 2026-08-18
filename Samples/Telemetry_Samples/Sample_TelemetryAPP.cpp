@@ -1198,7 +1198,7 @@ void CtlDevPropTest(ctl_device_adapter_handle_t hDAhandle)
     PRINT_LOGS("\n[DevProp] Is Workstation SKU [%s]", DecodeBoolean(DevPropProperties.isWorkstation).c_str());
 }
 
-void CtlPowerTelemetryPrintVramAndMisc(ctl_power_telemetry_t &pPowerTelemetry)
+void CtlPowerTelemetryPrintVramAndMisc(ctl_power_telemetry_v2_t &pPowerTelemetry)
 {
     if (pPowerTelemetry.vramVoltage.bSupported)
     {
@@ -1274,8 +1274,8 @@ void CtlPowerTelemetryPrintVramAndMisc(ctl_power_telemetry_t &pPowerTelemetry)
 
     if (pPowerTelemetry.gpuOverVoltagePercent.bSupported)
     {
-        PRINT_LOGS("\nGPU Overvoltage Percentage: %f (%s) Datatype:(%s)", pPowerTelemetry.gpuOverVoltagePercent.value.datadouble,
-                   DecodeCtlUnits(pPowerTelemetry.gpuOverVoltagePercent.units).c_str(), DecodeCtlDataType(pPowerTelemetry.gpuOverVoltagePercent.type).c_str());
+        PRINT_LOGS("\nGPU Overvoltage Percentage: %f (%s) Datatype:(%s)", pPowerTelemetry.gpuOverVoltagePercent.value.datadouble, DecodeCtlUnits(pPowerTelemetry.gpuOverVoltagePercent.units).c_str(),
+                   DecodeCtlDataType(pPowerTelemetry.gpuOverVoltagePercent.type).c_str());
     }
 
     if (pPowerTelemetry.gpuPowerPercent.bSupported)
@@ -1286,8 +1286,8 @@ void CtlPowerTelemetryPrintVramAndMisc(ctl_power_telemetry_t &pPowerTelemetry)
 
     if (pPowerTelemetry.gpuTemperaturePercent.bSupported)
     {
-        PRINT_LOGS("\nGPU Temperature Percentage: %f (%s) Datatype:(%s)", pPowerTelemetry.gpuTemperaturePercent.value.datadouble,
-                   DecodeCtlUnits(pPowerTelemetry.gpuTemperaturePercent.units).c_str(), DecodeCtlDataType(pPowerTelemetry.gpuTemperaturePercent.type).c_str());
+        PRINT_LOGS("\nGPU Temperature Percentage: %f (%s) Datatype:(%s)", pPowerTelemetry.gpuTemperaturePercent.value.datadouble, DecodeCtlUnits(pPowerTelemetry.gpuTemperaturePercent.units).c_str(),
+                   DecodeCtlDataType(pPowerTelemetry.gpuTemperaturePercent.type).c_str());
     }
 
     for (int i = 0; i < CTL_FAN_COUNT; i++)
@@ -1308,11 +1308,11 @@ void CtlPowerTelemetryPrintVramAndMisc(ctl_power_telemetry_t &pPowerTelemetry)
 
 void CtlPowerTelemetryTest(ctl_device_adapter_handle_t hDAhandle)
 {
-    ctl_power_telemetry_t pPowerTelemetry = {};
-    pPowerTelemetry.Size                  = sizeof(ctl_power_telemetry_t);
-    pPowerTelemetry.Version               = 1;
+    ctl_power_telemetry_v2_t pPowerTelemetry = {};
+    pPowerTelemetry.Size                     = sizeof(ctl_power_telemetry_v2_t);
+    pPowerTelemetry.Version                  = 1;
 
-    ctl_result_t Status = ctlPowerTelemetryGet(hDAhandle, &pPowerTelemetry);
+    ctl_result_t Status = ctlPowerTelemetryGetV2(hDAhandle, &pPowerTelemetry);
 
     static bool firstSample = true;
     double timeDiff         = 0.0;
@@ -1474,7 +1474,7 @@ void CtlPowerTelemetryTest(ctl_device_adapter_handle_t hDAhandle)
     }
     else
     {
-        PRINT_LOGS("\nCtlPowerTelemetryTest => ctlPowerTelemetryGet Result Error: %s, ErrorCode: 0x%x \n \n", DecodeRetCode(Status).c_str(), Status);
+        PRINT_LOGS("\nCtlPowerTelemetryTest => ctlPowerTelemetryGetV2 Result Error: %s, ErrorCode: 0x%x \n \n", DecodeRetCode(Status).c_str(), Status);
     }
 }
 
