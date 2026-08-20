@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.13.4 FATAL_ERROR)
-set(TARGET_NAME Scaling_Samples)
+set(TARGET_NAME DisplayQuantization_Sample)
 get_filename_component(ROOT_DIR ../../ ABSOLUTE)
-project(Scaling_Samples VERSION 1.0)
+project(DisplayQuantization_Sample VERSION 1.0)
 add_executable(${TARGET_NAME}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Scaling_App.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DisplayQuantization_Sample_App.cpp
     ${ROOT_DIR}/Source/cApiWrapper.cpp
 )
 
