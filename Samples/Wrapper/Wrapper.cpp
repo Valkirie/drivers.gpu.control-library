@@ -18,6 +18,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 #include <windows.h>
 using namespace std;
 
@@ -113,6 +114,145 @@ extern "C" {
     double prevvramReadBandwidthCounter = 0;
     double curvramWriteBandwidthCounter = 0;
     double prevvramWriteBandwidthCounter = 0;
+
+
+    /**
+     * @brief Set the pre-built shader download setting.
+     *
+     * Pass nullptr or an empty string for pApplicationName to change the
+     * adapter-wide setting. For a per-application setting, pass only the
+     * executable name, without its path, for example "Game.exe".
+     *
+     * Call GetPrebuiltShaderDownloadCaps first and only call this function
+     * when the feature is supported by the adapter.
+     *
+     * @param hDevice Device adapter handle returned by ctlEnumerateDevices.
+     * @param pApplicationName Optional application executable name.
+     * @param Enable true to enable pre-built shader download; false to disable it.
+     *
+     * @returns CTL_RESULT_SUCCESS on success.
+     */
+    static ctl_result_t SetPrebuiltShaderDownload(ctl_device_adapter_handle_t hDevice, const char* pApplicationName, bool Enable)
+    {
+        char* pName = const_cast<char*>(pApplicationName ? pApplicationName : "");
+        size_t NameLength = std::strlen(pName);
+
+        if (NameLength > INT8_MAX)
+            return CTL_RESULT_ERROR_INVALID_ARGUMENT;
+
+        ctl_3d_feature_getset_t Feature = {};
+        Feature.Size = sizeof(Feature);
+        Feature.Version = 0;
+        Feature.FeatureType = CTL_3D_FEATURE_PREBUILT_SHADER_DOWNLOAD;
+        Feature.ApplicationName = pName;
+        Feature.ApplicationNameLength = static_cast<int8_t>(NameLength);
+        Feature.bSet = true;
+        Feature.ValueType = CTL_PROPERTY_VALUE_TYPE_BOOL;
+        Feature.Value.BoolType.Enable = Enable;
+        Feature.CustomValueSize = 0;
+        Feature.pCustomValue = nullptr;
+
+        return ctlGetSet3DFeature(hDevice, &Feature);
+    }
+
+    /**
+     * @brief Get the pre-built shader download setting.
+     *
+     * Pass nullptr or an empty string for pApplicationName to query the
+     * adapter-wide setting. For a per-application setting, pass only the
+     * executable name, without its path, for example "Game.exe".
+     *
+     * @param hDevice Device adapter handle returned by ctlEnumerateDevices.
+     * @param pApplicationName Optional application executable name.
+     * @param pEnable Receives true when pre-built shader download is enabled.
+     *
+     * @returns CTL_RESULT_SUCCESS on success.
+     */
+    ctl_result_t GetPrebuiltShaderDownload(ctl_device_adapter_handle_t hDevice, const char* pApplicationName, bool* pEnable)
+    {
+        if (nullptr == pEnable)
+            return CTL_RESULT_ERROR_INVALID_NULL_POINTER;
+
+        char* pName = const_cast<char*>(pApplicationName ? pApplicationName : "");
+        size_t NameLength = std::strlen(pName);
+
+        if (NameLength > INT8_MAX)
+            return CTL_RESULT_ERROR_INVALID_ARGUMENT;
+
+        ctl_3d_feature_getset_t Feature = {};
+        Feature.Size = sizeof(Feature);
+        Feature.Version = 0;
+        Feature.FeatureType = CTL_3D_FEATURE_PREBUILT_SHADER_DOWNLOAD;
+        Feature.ApplicationName = pName;
+        Feature.ApplicationNameLength = static_cast<int8_t>(NameLength);
+        Feature.bSet = false;
+        Feature.ValueType = CTL_PROPERTY_VALUE_TYPE_BOOL;
+        Feature.CustomValueSize = 0;
+        Feature.pCustomValue = nullptr;
+
+        ctl_result_t Result = ctlGetSet3DFeature(hDevice, &Feature);
+        if (CTL_RESULT_SUCCESS == Result)
+            *pEnable = Feature.Value.BoolType.Enable;
+
+        return Result;
+    }
+
+    /**
+     * @brief Check whether pre-built shader download is supported.
+     *
+     * This query must be performed before GetPrebuiltShaderDownload or
+     * SetPrebuiltShaderDownload. A successful call with *pSupported set to
+     * false means that the adapter does not advertise this feature.
+     *
+     * @param hDevice Device adapter handle returned by ctlEnumerateDevices.
+     * @param pSupported Receives whether the feature is supported.
+     *
+     * @returns CTL_RESULT_SUCCESS when capability enumeration succeeds.
+     */
+    ctl_result_t GetPrebuiltShaderDownloadCaps(
+        ctl_device_adapter_handle_t hDevice,
+        bool* pSupported)
+    {
+        if (nullptr == pSupported)
+            return CTL_RESULT_ERROR_INVALID_NULL_POINTER;
+
+        *pSupported = false;
+
+        ctl_3d_feature_caps_t FeatureCaps = {};
+        FeatureCaps.Size = sizeof(FeatureCaps);
+
+        ctl_result_t Result = ctlGetSupported3DCapabilities(hDevice, &FeatureCaps);
+        if (CTL_RESULT_SUCCESS != Result)
+            return Result;
+
+        if (FeatureCaps.NumSupportedFeatures == 0)
+            return CTL_RESULT_SUCCESS;
+
+        ctl_3d_feature_details_t* pDetails =
+            static_cast<ctl_3d_feature_details_t*>(calloc(
+                FeatureCaps.NumSupportedFeatures,
+                sizeof(ctl_3d_feature_details_t)));
+        if (nullptr == pDetails)
+            return CTL_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+
+        FeatureCaps.pFeatureDetails = pDetails;
+        Result = ctlGetSupported3DCapabilities(hDevice, &FeatureCaps);
+        if (CTL_RESULT_SUCCESS == Result)
+        {
+            for (uint32_t i = 0; i < FeatureCaps.NumSupportedFeatures; ++i)
+            {
+                if (pDetails[i].FeatureType == CTL_3D_FEATURE_PREBUILT_SHADER_DOWNLOAD &&
+                    pDetails[i].ValueType == CTL_PROPERTY_VALUE_TYPE_BOOL)
+                {
+                    *pSupported = true;
+                    break;
+                }
+            }
+        }
+
+        free(pDetails);
+        return Result;
+    }
 
     ctl_result_t GetRetroScalingCaps(ctl_device_adapter_handle_t hDevice, ctl_retro_scaling_caps_t* RetroScalingCaps)
     {
@@ -548,19 +688,14 @@ extern "C" {
     {
         ctl_result_t Result = CTL_RESULT_SUCCESS;
 
-        // pack into v2 struct so we can use same API
-        ctl_endurance_gaming_t eg2 = { 0 };
-        eg2.EGControl = settings.EGControl;
-        eg2.EGMode = settings.EGMode;
-
         // build the set structure
         ctl_3d_feature_getset_t Feature3D = { 0 };
         Feature3D.bSet = TRUE;   // SET
         Feature3D.FeatureType = CTL_3D_FEATURE_ENDURANCE_GAMING;
         Feature3D.Size = sizeof(Feature3D);
         Feature3D.ValueType = CTL_PROPERTY_VALUE_TYPE_CUSTOM;
-        Feature3D.CustomValueSize = sizeof(eg2);
-        Feature3D.pCustomValue = &eg2;
+        Feature3D.CustomValueSize = sizeof(settings);
+        Feature3D.pCustomValue = &settings;
 
         // issue the call
         Result = ctlGetSet3DFeature(hDevice, &Feature3D);
@@ -568,8 +703,8 @@ extern "C" {
 
         // log for debug
         cout << "======== SetEnduranceGamingSettings ========" << endl;
-        cout << "EGControl now: " << eg2.EGControl << endl;
-        cout << "EGMode now:    " << eg2.EGMode << endl;
+        cout << "EGControl now: " << settings.EGControl << endl;
+        cout << "EGMode now:    " << settings.EGMode << endl;
 
     Exit:
         return Result;
