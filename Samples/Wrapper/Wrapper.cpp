@@ -83,6 +83,12 @@ typedef struct ctl_telemetry_data
     // Fanspeed (n Fans)
     bool fanSpeedSupported = false;
     double fanSpeedValue;
+
+    // VRAM Usage
+    bool vramUsageSupported = false;
+    uint64_t vramTotalBytes;
+    uint64_t vramFreeBytes;
+    uint64_t vramUsedBytes;
 };
 
 ctl_api_handle_t hAPIHandle;
@@ -618,6 +624,50 @@ extern "C" {
         return Result;
     }
 
+    bool GetVramUsage(ctl_device_adapter_handle_t hDevice, uint64_t* pTotalBytes, uint64_t* pFreeBytes)
+    {
+        uint32_t MemoryCount = 0;
+        ctl_result_t Result = ctlEnumMemoryModules(hDevice, &MemoryCount, nullptr);
+        if (Result != CTL_RESULT_SUCCESS || MemoryCount == 0)
+            return false;
+
+        vector<ctl_mem_handle_t> MemoryHandles(MemoryCount);
+        Result = ctlEnumMemoryModules(hDevice, &MemoryCount, MemoryHandles.data());
+        if (Result != CTL_RESULT_SUCCESS)
+            return false;
+
+        uint64_t TotalBytes = 0;
+        uint64_t FreeBytes = 0;
+        bool StateSupported = false;
+
+        for (uint32_t i = 0; i < MemoryCount; ++i)
+        {
+            ctl_mem_properties_t MemoryProperties = {};
+            MemoryProperties.Size = sizeof(ctl_mem_properties_t);
+            if (ctlMemoryGetProperties(MemoryHandles[i], &MemoryProperties) != CTL_RESULT_SUCCESS ||
+                MemoryProperties.location != CTL_MEM_LOC_DEVICE)
+            {
+                continue;
+            }
+
+            ctl_mem_state_t MemoryState = {};
+            MemoryState.Size = sizeof(ctl_mem_state_t);
+            if (ctlMemoryGetState(MemoryHandles[i], &MemoryState) != CTL_RESULT_SUCCESS)
+                continue;
+
+            TotalBytes += MemoryState.size;
+            FreeBytes += MemoryState.free;
+            StateSupported = true;
+        }
+
+        if (!StateSupported)
+            return false;
+
+        *pTotalBytes = TotalBytes;
+        *pFreeBytes = FreeBytes;
+        return true;
+    }
+
     ctl_result_t GetTelemetryData(ctl_device_adapter_handle_t hDevice, ctl_telemetry_data* TelemetryData)
     {
         ctl_result_t Result = CTL_RESULT_SUCCESS;
@@ -627,6 +677,21 @@ extern "C" {
         Result = ctlPowerTelemetryGet(hDevice, &pPowerTelemetry);
         if (Result != CTL_RESULT_SUCCESS)
             goto Exit;
+
+        TelemetryData->vramUsageSupported = false;
+        TelemetryData->vramTotalBytes = 0;
+        TelemetryData->vramFreeBytes = 0;
+        TelemetryData->vramUsedBytes = 0;
+
+        uint64_t VramTotalBytes = 0;
+        uint64_t VramFreeBytes = 0;
+        if (GetVramUsage(hDevice, &VramTotalBytes, &VramFreeBytes))
+        {
+            TelemetryData->vramUsageSupported = true;
+            TelemetryData->vramTotalBytes = VramTotalBytes;
+            TelemetryData->vramFreeBytes = VramFreeBytes;
+            TelemetryData->vramUsedBytes = VramTotalBytes >= VramFreeBytes ? VramTotalBytes - VramFreeBytes : 0;
+        }
 
         prevtimestamp = curtimestamp;
         curtimestamp = pPowerTelemetry.timeStamp.value.datadouble;
